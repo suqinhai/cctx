@@ -13,7 +13,7 @@ const { getStockHistory } = require("./data/index");
     // -----------------------------------------
 
     console.log(`🚀 开始拉取 [${STOCK_CODE}] 最近 ${DAYS} 天数据...`);
-    
+
     // 1. 获取在线数据
     const data = await getStockHistory(STOCK_CODE, DAYS);
 
@@ -22,12 +22,12 @@ const { getStockHistory } = require("./data/index");
         console.log("❌ 数据获取失败，请检查网络或股票代码。");
         return;
     }
-    console.log(`✅ 获取成功! 样本数: ${data.length} 条 (最新日期: ${data[data.length-1].date})`);
+    console.log(`✅ 获取成功! 样本数: ${data.length} 条 (最新日期: ${data[data.length - 1].date})`);
 
     // 3. 开始回测
     // 注意：A股一手是 100 股，如果股价 100 元，至少需要 10000 本金，建议本金设大一点
     const result = backtest(data, MaAtr, {
-        initialCash: 100000, 
+        initialCash: 100000,
         strategyConfig: {
             fast: 5,           // 均线参数可以针对 A 股微调
             slow: 20,
@@ -50,7 +50,7 @@ const { getStockHistory } = require("./data/index");
     // 5. 计算并打印业绩
     const navs = result.navs;
     const totalRet = (navs[navs.length - 1].nav - navs[0].nav) / navs[0].nav;
-    
+
     // 简单计算最大回撤
     let peak = -Infinity, mdd = 0;
     navs.forEach(n => {

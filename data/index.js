@@ -22,12 +22,12 @@ async function getStockHistory(code, dayCount = 300) {
 
     try {
         const resp = await axios.get(url, { headers: HEADERS });
-        
+
         // 3. 数据解析
         // 接口返回结构通常是: resp.data.data[fullCode].qfqday (前复权数据)
         // 如果没有复权数据，可能是新股，取 day
         const dataNode = resp.data && resp.data.data && resp.data.data[fullCode];
-        
+
         if (!dataNode) {
             console.error(`❌ 未找到股票 ${code} 的数据`);
             return [];
