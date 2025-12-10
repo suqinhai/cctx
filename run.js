@@ -70,7 +70,8 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
     });
 
     // ========== 第四步：计算完整业绩指标 ==========
-    const metrics = generateMetrics(result);
+    // 传入市场数据用于计算Alpha/Beta等基准对比指标
+    const metrics = generateMetrics(result, data);
 
     // ========== 第五步：生成报告文件 ==========
     // 创建 report 目录（如果不存在）
@@ -134,6 +135,34 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
         fs.writeFileSync(path.join(reportDir, "drawdown_periods.csv"), ddCsv.join("\n"));
     }
 
+    // ----- 5.5 生成月度收益 CSV -----
+    if (metrics.monthlyReturns.length > 0) {
+        const monthlyCsv = ["月份,收益率,期初净值,期末净值"];
+        metrics.monthlyReturns.forEach(m => {
+            monthlyCsv.push([
+                m.month,
+                (m.return * 100).toFixed(2) + '%',
+                m.startNav.toFixed(2),
+                m.endNav.toFixed(2)
+            ].join(","));
+        });
+        fs.writeFileSync(path.join(reportDir, "monthly_returns.csv"), monthlyCsv.join("\n"));
+    }
+
+    // ----- 5.6 生成年度收益 CSV -----
+    if (metrics.yearlyReturns.length > 0) {
+        const yearlyCsv = ["年份,收益率,期初净值,期末净值"];
+        metrics.yearlyReturns.forEach(y => {
+            yearlyCsv.push([
+                y.year,
+                (y.return * 100).toFixed(2) + '%',
+                y.startNav.toFixed(2),
+                y.endNav.toFixed(2)
+            ].join(","));
+        });
+        fs.writeFileSync(path.join(reportDir, "yearly_returns.csv"), yearlyCsv.join("\n"));
+    }
+
     // ========== 第六步：打印完整业绩报告 ==========
     console.log("\n");
     console.log("╔════════════════════════════════════════════════════════════════╗");
@@ -174,6 +203,15 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
     console.log(`║   夏普比率 (Sharpe): ${formatRatio(metrics.sharpeRatio).padEnd(41)}║`);
     console.log(`║   索提诺比率 (Sortino): ${formatRatio(metrics.sortinoRatio).padEnd(38)}║`);
     console.log(`║   卡尔玛比率 (Calmar): ${formatRatio(metrics.calmarRatio).padEnd(39)}║`);
+    console.log(`║   收益回撤比: ${formatRatio(metrics.returnDrawdownRatio).padEnd(48)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- VaR风险指标 -----
+    console.log("║ 【VaR风险指标】                                                ║");
+    console.log(`║   VaR(95%): ${formatPercent(metrics.var95).padEnd(50)}║`);
+    console.log(`║   VaR(99%): ${formatPercent(metrics.var99).padEnd(50)}║`);
+    console.log(`║   CVaR(95%): ${formatPercent(metrics.cvar95).padEnd(49)}║`);
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
 
@@ -199,11 +237,58 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
 
+    // ----- 连续盈亏 -----
+    console.log("║ 【连续盈亏统计】                                               ║");
+    console.log(`║   最大连续盈利次数: ${String(metrics.maxConsecutiveWins).padEnd(42)}║`);
+    console.log(`║   最大连续亏损次数: ${String(metrics.maxConsecutiveLosses).padEnd(42)}║`);
+    console.log(`║   最大连续亏损金额: ${formatNumber(metrics.maxConsecutiveLossAmount).padEnd(42)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
     // ----- 极值统计 -----
     console.log("║ 【极值统计】                                                   ║");
     console.log(`║   最大单笔盈利: ${formatNumber(metrics.maxWin)} (${formatPercent(metrics.maxWinPct)})`.padEnd(65) + "║");
     console.log(`║   最大单笔亏损: ${formatNumber(metrics.maxLoss)} (${formatPercent(metrics.maxLossPct)})`.padEnd(65) + "║");
     console.log(`║   平均持仓天数: ${metrics.avgHoldingDays.toFixed(1)}`.padEnd(65) + "║");
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 盈亏天数 -----
+    console.log("║ 【盈亏天数统计】                                               ║");
+    console.log(`║   盈利天数: ${String(metrics.profitDays).padEnd(50)}║`);
+    console.log(`║   亏损天数: ${String(metrics.lossDays).padEnd(50)}║`);
+    console.log(`║   持平天数: ${String(metrics.flatDays).padEnd(50)}║`);
+    console.log(`║   盈利天数占比: ${formatPercent(metrics.profitDaysRatio).padEnd(46)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 交易频率 -----
+    console.log("║ 【交易频率】                                                   ║");
+    console.log(`║   年均交易次数: ${metrics.tradesPerYear.toFixed(1).padEnd(46)}║`);
+    console.log(`║   月均交易次数: ${metrics.tradesPerMonth.toFixed(1).padEnd(46)}║`);
+    console.log(`║   平均交易间隔: ${metrics.avgDaysBetweenTrades.toFixed(1)} 天`.padEnd(57) + "║");
+    console.log(`║   资金利用率: ${formatPercent(metrics.capitalUtilization).padEnd(48)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 收益分布特征 -----
+    console.log("║ 【收益分布特征】                                               ║");
+    console.log(`║   偏度 (Skewness): ${formatRatio(metrics.skewness).padEnd(43)}║`);
+    console.log(`║   峰度 (Kurtosis): ${formatRatio(metrics.kurtosis).padEnd(43)}║`);
+    console.log(`║   月度胜率: ${formatPercent(metrics.monthlyWinRate).padEnd(50)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- Alpha/Beta分析 -----
+    console.log("║ 【Alpha/Beta分析】(相对买入持有基准)                           ║");
+    if (metrics.benchmarkStats) {
+        console.log(`║   基准总收益率: ${formatPercent(metrics.benchmarkStats.totalReturn).padEnd(46)}║`);
+        console.log(`║   基准年化收益: ${formatPercent(metrics.benchmarkStats.annualReturn).padEnd(46)}║`);
+    }
+    console.log(`║   Alpha: ${formatPercent(metrics.alpha).padEnd(53)}║`);
+    console.log(`║   Beta: ${formatRatio(metrics.beta).padEnd(54)}║`);
+    console.log(`║   信息比率 (IR): ${formatRatio(metrics.informationRatio).padEnd(45)}║`);
+    console.log(`║   相关系数: ${formatRatio(metrics.correlation).padEnd(50)}║`);
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
 
@@ -213,6 +298,8 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
     console.log(`║   成交记录: report/trades.csv                                  ║`);
     console.log(`║   滚动夏普: report/rolling_sharpe.csv                          ║`);
     console.log(`║   回撤恢复: report/drawdown_periods.csv                        ║`);
+    console.log(`║   月度收益: report/monthly_returns.csv                         ║`);
+    console.log(`║   年度收益: report/yearly_returns.csv                          ║`);
 
     console.log("╚════════════════════════════════════════════════════════════════╝");
 
@@ -263,6 +350,30 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
             const avg = avgRecovery.reduce((a, b) => a + b, 0) / avgRecovery.length;
             console.log(`   平均恢复天数: ${avg.toFixed(1)} 天`);
         }
+    }
+
+    // ----- 月度收益统计 -----
+    if (metrics.monthlyReturns.length > 0) {
+        console.log("\n📅 月度收益分布:");
+        const positiveMonths = metrics.monthlyReturns.filter(m => m.return > 0);
+        const negativeMonths = metrics.monthlyReturns.filter(m => m.return < 0);
+        const monthReturns = metrics.monthlyReturns.map(m => m.return);
+        const avgMonthReturn = monthReturns.reduce((a, b) => a + b, 0) / monthReturns.length;
+        const maxMonth = Math.max(...monthReturns);
+        const minMonth = Math.min(...monthReturns);
+
+        console.log(`   月度胜率: ${(positiveMonths.length / metrics.monthlyReturns.length * 100).toFixed(1)}% (${positiveMonths.length}/${metrics.monthlyReturns.length})`);
+        console.log(`   平均月收益: ${(avgMonthReturn * 100).toFixed(2)}%`);
+        console.log(`   最佳月收益: ${(maxMonth * 100).toFixed(2)}% | 最差月收益: ${(minMonth * 100).toFixed(2)}%`);
+    }
+
+    // ----- 年度收益统计 -----
+    if (metrics.yearlyReturns.length > 0) {
+        console.log("\n📆 年度收益分布:");
+        metrics.yearlyReturns.forEach(y => {
+            const sign = y.return >= 0 ? '+' : '';
+            console.log(`   ${y.year}: ${sign}${(y.return * 100).toFixed(2)}%`);
+        });
     }
 
     console.log("\n✅ 回测完成!");

@@ -7,6 +7,10 @@
 // 手续费率：0.1%（万分之十），A股实际约为万3左右
 const COMMISSION = 0.001;
 
+// 印花税率：0.1%（千分之一），A股卖出时单边收取
+// 2023年8月28日起，印花税由0.1%下调至0.05%，这里使用0.1%作为保守估计
+const STAMP_TAX = 0.001;
+
 // 滑点率：0%（简化处理，实际交易中会有买卖价差）
 // 滑点：实际成交价与预期价格之间的差异
 const SLIPPAGE_PCT = 0.000;
@@ -53,7 +57,8 @@ module.exports = function backtest(data, StrategyClass, opts = {}) {
 
   // ========== 第四步：初始化记录数组 ==========
   let navs = [];                          // 净值序列，用于绘制收益曲线
-  const commissionsPaid = [];             // 手续费记录
+  const commissionsPaid = [];             // 手续费记录（买卖双向）
+  const stampTaxesPaid = [];              // 印花税记录（仅卖出）
   const trades = [];                      // 成交记录数组
 
   // 当前交易的临时变量
@@ -80,13 +85,16 @@ module.exports = function backtest(data, StrategyClass, opts = {}) {
         // 按止损价成交（假设止损单能够在止损价成交）
         const sellPrice = stopPrice;
 
-        // 计算卖出所得 = 股数 × 价格 × (1 - 手续费率)
-        const proceeds = position * sellPrice * (1 - COMMISSION);
+        // 计算卖出成本：手续费 + 印花税（仅卖出收取）
         const commission = position * sellPrice * COMMISSION;
+        const stampTax = position * sellPrice * STAMP_TAX;
+        // 计算卖出所得 = 股数 × 价格 - 手续费 - 印花税
+        const proceeds = position * sellPrice - commission - stampTax;
         cash += proceeds;  // 资金回笼
 
-        // 记录手续费
+        // 记录手续费和印花税
         commissionsPaid.push(commission);
+        stampTaxesPaid.push(stampTax);
 
         // ========== 记录成交（止损卖出） ==========
         if (currentTrade) {
@@ -94,6 +102,7 @@ module.exports = function backtest(data, StrategyClass, opts = {}) {
           currentTrade.exitPrice = sellPrice;
           currentTrade.exitType = 'STOP_LOSS';  // 止损出场
           currentTrade.exitCommission = commission;
+          currentTrade.exitStampTax = stampTax;
           currentTrade.proceeds = proceeds;
           currentTrade.pnl = proceeds - currentTrade.cost;  // 盈亏金额
           currentTrade.pnlPct = (sellPrice - currentTrade.entryPrice) / currentTrade.entryPrice;  // 盈亏比例
