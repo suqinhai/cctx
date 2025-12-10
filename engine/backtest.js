@@ -143,13 +143,16 @@ module.exports = function backtest(data, StrategyClass, opts = {}) {
       // 获取卖出价格，默认使用收盘价
       const sellPrice = signal.exitPrice || price;
 
-      // 计算卖出所得（扣除手续费）
+      // 计算卖出成本：手续费 + 印花税（仅卖出收取）
       const commission = position * sellPrice * COMMISSION;
-      const proceeds = position * sellPrice * (1 - COMMISSION);
+      const stampTax = position * sellPrice * STAMP_TAX;
+      // 计算卖出所得（扣除手续费和印花税）
+      const proceeds = position * sellPrice - commission - stampTax;
       cash += proceeds;
 
-      // 记录手续费
+      // 记录手续费和印花税
       commissionsPaid.push(commission);
+      stampTaxesPaid.push(stampTax);
 
       // ========== 记录成交（信号卖出） ==========
       if (currentTrade) {
@@ -157,6 +160,7 @@ module.exports = function backtest(data, StrategyClass, opts = {}) {
         currentTrade.exitPrice = sellPrice;
         currentTrade.exitType = 'SIGNAL';  // 信号出场
         currentTrade.exitCommission = commission;
+        currentTrade.exitStampTax = stampTax;
         currentTrade.proceeds = proceeds;
         currentTrade.pnl = proceeds - currentTrade.cost;  // 盈亏金额
         currentTrade.pnlPct = (sellPrice - currentTrade.entryPrice) / currentTrade.entryPrice;  // 盈亏比例
@@ -256,10 +260,18 @@ module.exports = function backtest(data, StrategyClass, opts = {}) {
   }
 
   // ========== 第六步：返回回测结果 ==========
+  // 计算总手续费和总印花税
+  const totalCommission = commissionsPaid.reduce((sum, c) => sum + c, 0);
+  const totalStampTax = stampTaxesPaid.reduce((sum, t) => sum + t, 0);
+
   return {
     navs,              // 净值序列，用于计算收益率、回撤等
     trades,            // 成交记录数组
     commissionsPaid,   // 手续费记录，用于分析交易成本
+    stampTaxesPaid,    // 印花税记录
+    totalCommission,   // 总手续费
+    totalStampTax,     // 总印花税
+    totalTradingCost: totalCommission + totalStampTax,  // 总交易成本
     finalCash: cash,   // 最终现金余额
     finalPosition: position,  // 最终持仓（如果还有的话）
     initialCash: opts.initialCash || 10000,  // 初始资金

@@ -179,6 +179,15 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
 
+    // ----- 交易成本 -----
+    console.log("║ 【交易成本】                                                   ║");
+    console.log(`║   总手续费: ${formatNumber(result.totalCommission).padEnd(50)}║`);
+    console.log(`║   总印花税: ${formatNumber(result.totalStampTax).padEnd(50)}║`);
+    console.log(`║   总交易成本: ${formatNumber(result.totalTradingCost).padEnd(48)}║`);
+    console.log(`║   成本占比: ${formatPercent(result.totalTradingCost / result.initialCash).padEnd(50)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
     // ----- 收益指标 -----
     console.log("║ 【收益指标】                                                   ║");
     console.log(`║   总收益率: ${formatPercent(metrics.totalReturn).padEnd(50)}║`);
