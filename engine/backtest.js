@@ -22,6 +22,7 @@ const SLIPPAGE_PCT = 0.000;
  *
  * @returns {Object} 回测结果，包含:
  *   - navs: 每日净值数组 [{date, nav}, ...]
+ *   - trades: 成交记录数组
  *   - commissionsPaid: 所有手续费记录
  *   - finalCash: 最终现金余额
  *   - finalPosition: 最终持仓数量
@@ -47,11 +48,16 @@ module.exports = function backtest(data, StrategyClass, opts = {}) {
   let cash = opts.initialCash || 10000;  // 可用现金
   let position = 0;                       // 持仓数量（股数/份数）
   let entryPrice = null;                  // 入场价格（用于计算盈亏）
+  let entryDate = null;                   // 入场日期
   let stopPrice = null;                   // 止损价格
 
   // ========== 第四步：初始化记录数组 ==========
   let navs = [];                          // 净值序列，用于绘制收益曲线
   const commissionsPaid = [];             // 手续费记录
+  const trades = [];                      // 成交记录数组
+
+  // 当前交易的临时变量
+  let currentTrade = null;
 
   // ========== 第五步：遍历每根K线进行回测 ==========
   for (let i = 0; i < data.length; i++) {
@@ -76,14 +82,31 @@ module.exports = function backtest(data, StrategyClass, opts = {}) {
 
         // 计算卖出所得 = 股数 × 价格 × (1 - 手续费率)
         const proceeds = position * sellPrice * (1 - COMMISSION);
+        const commission = position * sellPrice * COMMISSION;
         cash += proceeds;  // 资金回笼
 
         // 记录手续费
-        commissionsPaid.push(position * sellPrice * COMMISSION);
+        commissionsPaid.push(commission);
+
+        // ========== 记录成交（止损卖出） ==========
+        if (currentTrade) {
+          currentTrade.exitDate = bar.date;
+          currentTrade.exitPrice = sellPrice;
+          currentTrade.exitType = 'STOP_LOSS';  // 止损出场
+          currentTrade.exitCommission = commission;
+          currentTrade.proceeds = proceeds;
+          currentTrade.pnl = proceeds - currentTrade.cost;  // 盈亏金额
+          currentTrade.pnlPct = (sellPrice - currentTrade.entryPrice) / currentTrade.entryPrice;  // 盈亏比例
+          currentTrade.holdingDays = trades.length > 0 ?
+            Math.round((new Date(bar.date) - new Date(currentTrade.entryDate)) / (1000 * 60 * 60 * 24)) : 0;
+          trades.push({ ...currentTrade });
+          currentTrade = null;
+        }
 
         // 清空持仓状态
         position = 0;
         entryPrice = null;
+        entryDate = null;
         stopPrice = null;
 
         // 记录止损后的净值（此时净值 = 现金，因为已清仓）
@@ -112,15 +135,31 @@ module.exports = function backtest(data, StrategyClass, opts = {}) {
       const sellPrice = signal.exitPrice || price;
 
       // 计算卖出所得（扣除手续费）
+      const commission = position * sellPrice * COMMISSION;
       const proceeds = position * sellPrice * (1 - COMMISSION);
       cash += proceeds;
 
       // 记录手续费
-      commissionsPaid.push(position * sellPrice * COMMISSION);
+      commissionsPaid.push(commission);
+
+      // ========== 记录成交（信号卖出） ==========
+      if (currentTrade) {
+        currentTrade.exitDate = bar.date;
+        currentTrade.exitPrice = sellPrice;
+        currentTrade.exitType = 'SIGNAL';  // 信号出场
+        currentTrade.exitCommission = commission;
+        currentTrade.proceeds = proceeds;
+        currentTrade.pnl = proceeds - currentTrade.cost;  // 盈亏金额
+        currentTrade.pnlPct = (sellPrice - currentTrade.entryPrice) / currentTrade.entryPrice;  // 盈亏比例
+        currentTrade.holdingDays = Math.round((new Date(bar.date) - new Date(currentTrade.entryDate)) / (1000 * 60 * 60 * 24));
+        trades.push({ ...currentTrade });
+        currentTrade = null;
+      }
 
       // 清空持仓状态
       position = 0;
       entryPrice = null;
+      entryDate = null;
       stopPrice = null;
 
       // 记录卖出后的净值
@@ -151,15 +190,37 @@ module.exports = function backtest(data, StrategyClass, opts = {}) {
         const buyPrice = signal.entryPrice || price;
 
         // 计算实际成本（含手续费）
+        const commission = shares * buyPrice * COMMISSION;
         const actualCost = shares * buyPrice * (1 + COMMISSION);
         cash -= actualCost;  // 扣除资金
 
         // 记录手续费
-        commissionsPaid.push(shares * buyPrice * COMMISSION);
+        commissionsPaid.push(commission);
+
+        // ========== 记录成交（买入） ==========
+        currentTrade = {
+          tradeNo: trades.length + 1,    // 交易编号
+          entryDate: bar.date,           // 入场日期
+          entryPrice: buyPrice,          // 入场价格
+          shares: shares,                // 买入股数
+          stopPrice: signal.stopPrice,   // 止损价格
+          entryCommission: commission,   // 入场手续费
+          cost: actualCost,              // 总成本（含手续费）
+          // 以下字段在卖出时填充
+          exitDate: null,
+          exitPrice: null,
+          exitType: null,
+          exitCommission: null,
+          proceeds: null,
+          pnl: null,
+          pnlPct: null,
+          holdingDays: null
+        };
 
         // 更新持仓状态
         position = shares;           // 持仓数量
         entryPrice = buyPrice;       // 入场价格
+        entryDate = bar.date;        // 入场日期
         stopPrice = signal.stopPrice; // 止损价格（由策略设定）
       }
     }
@@ -170,11 +231,28 @@ module.exports = function backtest(data, StrategyClass, opts = {}) {
     navs.push({ date: bar.date, nav: navAfter });
   }
 
+  // ========== 处理未平仓的持仓 ==========
+  // 如果回测结束时还有持仓，记录为未平仓交易
+  if (currentTrade && position > 0) {
+    const lastBar = data[data.length - 1];
+    currentTrade.exitDate = lastBar.date + ' (未平仓)';
+    currentTrade.exitPrice = lastBar.close;
+    currentTrade.exitType = 'OPEN';  // 未平仓
+    currentTrade.exitCommission = 0;
+    currentTrade.proceeds = position * lastBar.close;
+    currentTrade.pnl = currentTrade.proceeds - currentTrade.cost;
+    currentTrade.pnlPct = (lastBar.close - currentTrade.entryPrice) / currentTrade.entryPrice;
+    currentTrade.holdingDays = Math.round((new Date(lastBar.date) - new Date(currentTrade.entryDate)) / (1000 * 60 * 60 * 24));
+    trades.push({ ...currentTrade });
+  }
+
   // ========== 第六步：返回回测结果 ==========
   return {
     navs,              // 净值序列，用于计算收益率、回撤等
+    trades,            // 成交记录数组
     commissionsPaid,   // 手续费记录，用于分析交易成本
     finalCash: cash,   // 最终现金余额
     finalPosition: position,  // 最终持仓（如果还有的话）
+    initialCash: opts.initialCash || 10000,  // 初始资金
   };
 };
