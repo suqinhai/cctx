@@ -32,11 +32,11 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
 
     // 股票代码（6位数字）
     // 例如：'000001'=平安银行, '600519'=贵州茅台, '300750'=宁德时代
-    const STOCK_CODE = '000001';
+    const STOCK_CODE = '600383';
 
     // 回测数据天数
     // 获取最近多少个交易日的数据
-    const DAYS = 500;
+    const DAYS = 365 * 5;
 
     // ========== 第一步：获取历史数据 ==========
     console.log(`🚀 开始拉取 [${STOCK_CODE}] 最近 ${DAYS} 天数据...`);
@@ -219,13 +219,18 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
     console.log(`║   下行波动率: ${formatPercent(metrics.downsideVolatility).padEnd(48)}║`);
     console.log(`║   收益率标准差: ${formatPercent(metrics.returnStdDev).padEnd(46)}║`);
     console.log(`║   最大回撤: ${formatPercent(metrics.maxDrawdown).padEnd(50)}║`);
+    console.log(`║   95%回撤: ${formatPercent(metrics.drawdown95).padEnd(51)}║`);
     console.log(`║   平均回撤: ${formatPercent(metrics.averageDrawdown).padEnd(50)}║`);
+    console.log(`║   Pain Index: ${formatPercent(metrics.painIndex).padEnd(48)}║`);
     console.log(`║   水下时间比例: ${formatPercent(metrics.underwaterRatio).padEnd(46)}║`);
     console.log(`║   回撤峰值日: ${(metrics.drawdownPeakDate || '-').padEnd(48)}║`);
     console.log(`║   回撤谷值日: ${(metrics.drawdownTroughDate || '-').padEnd(48)}║`);
     console.log(`║   回撤恢复日: ${String(metrics.drawdownRecoveryDate || '-').padEnd(48)}║`);
     console.log(`║   回撤持续天数: ${String(metrics.drawdownDays || '-').padEnd(46)}║`);
     console.log(`║   恢复所需天数: ${String(metrics.recoveryDays !== null ? metrics.recoveryDays : '未恢复').padEnd(46)}║`);
+    console.log(`║   平均回撤持续: ${String(metrics.avgDrawdownDuration ? metrics.avgDrawdownDuration.toFixed(1) : '-').padEnd(46)}║`);
+    console.log(`║   最长回撤持续: ${String(metrics.maxDrawdownDuration || '-').padEnd(46)}║`);
+    console.log(`║   回撤次数: ${String(metrics.drawdownCount || '-').padEnd(50)}║`);
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
 
@@ -233,6 +238,10 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
     console.log("║ 【最大单日涨跌】                                               ║");
     console.log(`║   最大单日盈利: ${formatPercent(metrics.maxDailyGain)} (${metrics.maxDailyGainDate || '-'})`.padEnd(62) + "║");
     console.log(`║   最大单日亏损: ${formatPercent(metrics.maxDailyLoss)} (${metrics.maxDailyLossDate || '-'})`.padEnd(62) + "║");
+    console.log(`║   最大连续盈利天数: ${String(metrics.maxConsecutiveWinDays || 0).padEnd(42)}║`);
+    console.log(`║   最大连续亏损天数: ${String(metrics.maxConsecutiveLossDays || 0).padEnd(42)}║`);
+    console.log(`║   最长盈利周期: ${String(metrics.longestProfitPeriod || 0)} 天`.padEnd(53) + "║");
+    console.log(`║   最长亏损周期: ${String(metrics.longestLossPeriod || 0)} 天`.padEnd(53) + "║");
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
 
@@ -247,6 +256,9 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
     console.log(`║   Tail比率: ${formatRatio(metrics.tailRatio).padEnd(50)}║`);
     console.log(`║   Sterling比率: ${formatRatio(metrics.sterlingRatio).padEnd(46)}║`);
     console.log(`║   Burke比率: ${formatRatio(metrics.burkeRatio).padEnd(49)}║`);
+    console.log(`║   Pain比率: ${formatRatio(metrics.painRatio).padEnd(50)}║`);
+    console.log(`║   Treynor比率: ${formatRatio(metrics.treynorRatio).padEnd(47)}║`);
+    console.log(`║   M² (Modigliani): ${formatPercent(metrics.m2).padEnd(43)}║`);
     console.log(`║   Ulcer Index: ${formatRatio(metrics.ulcerIndex).padEnd(47)}║`);
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
@@ -278,6 +290,18 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
     console.log(`║   平均亏损比例: ${formatPercent(metrics.avgLossPct).padEnd(46)}║`);
     console.log(`║   盈亏比: ${formatRatio(metrics.profitLossRatio).padEnd(52)}║`);
     console.log(`║   单笔期望值: ${formatNumber(metrics.expectancy).padEnd(48)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 交易质量指标 -----
+    console.log("║ 【交易质量指标】                                               ║");
+    console.log(`║   利润因子: ${formatRatio(metrics.profitFactor).padEnd(50)}║`);
+    console.log(`║   系统质量数(SQN): ${formatRatio(metrics.sqn).padEnd(43)}║`);
+    console.log(`║   平均R倍数: ${formatRatio(metrics.avgRMultiple).padEnd(49)}║`);
+    console.log(`║   最大R倍数: ${formatRatio(metrics.maxR).padEnd(49)}║`);
+    console.log(`║   最小R倍数: ${formatRatio(metrics.minR).padEnd(49)}║`);
+    console.log(`║   凯利比例: ${formatPercent(metrics.kellyRatio).padEnd(50)}║`);
+    console.log(`║   交易收益夏普: ${formatRatio(metrics.tradeReturnSharpe).padEnd(46)}║`);
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
 
@@ -322,6 +346,14 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
     console.log(`║   月度胜率: ${formatPercent(metrics.monthlyWinRate).padEnd(50)}║`);
     console.log(`║   周度胜率: ${formatPercent(metrics.weeklyWinRate).padEnd(50)}║`);
     console.log(`║   正收益天数占比: ${formatPercent(metrics.positiveReturnRatio).padEnd(44)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 稳定性指标 -----
+    console.log("║ 【稳定性指标】                                                 ║");
+    console.log(`║   收益一致性: ${formatPercent(metrics.returnConsistency).padEnd(48)}║`);
+    console.log(`║   滚动收益稳定性: ${formatPercent(metrics.rollingReturnStability).padEnd(44)}║`);
+    console.log(`║   平均滚动收益: ${formatPercent(metrics.avgRollingReturn).padEnd(46)}║`);
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
 
@@ -370,6 +402,141 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
     console.log(`║   Beta: ${formatRatio(metrics.beta).padEnd(54)}║`);
     console.log(`║   信息比率 (IR): ${formatRatio(metrics.informationRatio).padEnd(45)}║`);
     console.log(`║   相关系数: ${formatRatio(metrics.correlation).padEnd(50)}║`);
+    console.log(`║   Jensen's Alpha: ${formatPercent(metrics.jensensAlpha).padEnd(44)}║`);
+    console.log(`║   年化超额收益: ${formatPercent(metrics.annualExcessReturn).padEnd(46)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 波动率分析 -----
+    console.log("║ 【波动率分析】                                                 ║");
+    console.log(`║   波动率偏度: ${formatRatio(metrics.volatilitySkew).padEnd(48)}║`);
+    console.log(`║   Sharpe(4%无风险): ${formatRatio(metrics.sharpeRatio4Pct).padEnd(42)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 换手率与成本 -----
+    console.log("║ 【换手率与成本】                                               ║");
+    console.log(`║   年化换手率: ${formatRatio(metrics.annualTurnover).padEnd(48)}║`);
+    console.log(`║   平均单次换手: ${formatPercent(metrics.avgRebalanceTurnover).padEnd(46)}║`);
+    console.log(`║   最大单次换手: ${formatPercent(metrics.maxRebalanceTurnover).padEnd(46)}║`);
+    console.log(`║   交易成本率: ${formatPercent(metrics.tradingCostRate).padEnd(48)}║`);
+    console.log(`║   估算总滑点: ${formatPercent(metrics.estimatedSlippage).padEnd(48)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 市场冲击与容量 -----
+    console.log("║ 【市场冲击与容量】                                             ║");
+    console.log(`║   平均市场冲击: ${formatPercent(metrics.avgMarketImpact).padEnd(46)}║`);
+    console.log(`║   最大市场冲击: ${formatPercent(metrics.maxMarketImpact).padEnd(46)}║`);
+    console.log(`║   策略容量: ${formatNumber(metrics.strategyCapacityYi)} 亿元`.padEnd(58) + "║");
+    console.log(`║   日均成交额: ${formatNumber(metrics.avgDailyVolume / 100000000)} 亿元`.padEnd(56) + "║");
+    console.log(`║   平均成交额占比: ${formatPercent(metrics.avgVolumeRatio).padEnd(44)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 流动性指标 -----
+    console.log("║ 【流动性指标】                                                 ║");
+    console.log(`║   流动性分数: ${formatRatio(metrics.liquidityScore)} / 100`.padEnd(56) + "║");
+    console.log(`║   平均价差: ${formatPercent(metrics.avgSpread).padEnd(50)}║`);
+    console.log(`║   成交量稳定性: ${formatPercent(metrics.volumeStability).padEnd(46)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 持仓集中度 -----
+    console.log("║ 【持仓集中度】                                                 ║");
+    console.log(`║   HHI指数: ${formatRatio(metrics.hhi).padEnd(51)}║`);
+    console.log(`║   前10持仓占比: ${formatPercent(metrics.top10Ratio).padEnd(46)}║`);
+    console.log(`║   有效持仓数: ${formatRatio(metrics.effectiveN).padEnd(48)}║`);
+    console.log(`║   高集中度: ${metrics.isConcentrated ? '是' : '否'}`.padEnd(62) + "║");
+    console.log(`║   流通市值下限: ${formatNumber(metrics.marketCapFloorYi)} 亿元`.padEnd(54) + "║");
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 策略稳健性 -----
+    console.log("║ 【策略稳健性】                                                 ║");
+    console.log(`║   年化衰减率: ${formatPercent(metrics.decayRate).padEnd(48)}║`);
+    console.log(`║   前半段年化: ${formatPercent(metrics.firstHalfReturn).padEnd(48)}║`);
+    console.log(`║   后半段年化: ${formatPercent(metrics.secondHalfReturn).padEnd(48)}║`);
+    console.log(`║   策略衰减: ${metrics.isDecaying ? '是' : '否'}`.padEnd(62) + "║");
+    console.log(`║   样本内外比: ${formatRatio(metrics.inOutSampleRatio).padEnd(48)}║`);
+    console.log(`║   样本内收益: ${formatPercent(metrics.inSampleReturn).padEnd(48)}║`);
+    console.log(`║   样本外收益: ${formatPercent(metrics.outSampleReturn).padEnd(48)}║`);
+    console.log(`║   过拟合风险: ${metrics.isOverfit ? '是' : '否'}`.padEnd(60) + "║");
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- Walk-Forward分析 -----
+    console.log("║ 【Walk-Forward分析】                                           ║");
+    console.log(`║   WF平均收益: ${formatPercent(metrics.walkForwardAvgReturn).padEnd(48)}║`);
+    console.log(`║   WF一致性: ${formatPercent(metrics.walkForwardConsistency).padEnd(50)}║`);
+    console.log(`║   WF周期数: ${String(metrics.walkForwardPeriods || 0).padEnd(50)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 蒙特卡洛模拟 -----
+    console.log("║ 【蒙特卡洛模拟】                                               ║");
+    console.log(`║   MC胜率: ${formatPercent(metrics.monteCarloWinRate).padEnd(52)}║`);
+    console.log(`║   MC百分位: ${formatPercent(metrics.monteCarloPercentile).padEnd(50)}║`);
+    console.log(`║   统计显著: ${metrics.isStatisticallySignificant ? '是 (95%置信)' : '否'}`.padEnd(56) + "║");
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 参数稳定性 -----
+    console.log("║ 【参数稳定性】                                                 ║");
+    console.log(`║   稳定性分数: ${String(metrics.parameterStabilityScore || 0).padEnd(48)}║`);
+    console.log(`║   参数稳定: ${metrics.isStable ? '是' : '否'}`.padEnd(62) + "║");
+    console.log(`║   风险等级: ${String(metrics.riskLevel || '-').padEnd(50)}║`);
+    console.log(`║   估算寿命: ${String(metrics.estimatedLifespanMonths || 0)} 个月`.padEnd(54) + "║");
+    console.log(`║   寿命置信度: ${String(metrics.lifespanConfidence || '-').padEnd(48)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 多周期年化 -----
+    console.log("║ 【多周期年化】                                                 ║");
+    console.log(`║   日频年化: ${formatPercent(metrics.dailyAnnualReturn).padEnd(50)}║`);
+    console.log(`║   周频年化: ${formatPercent(metrics.weeklyAnnualReturn).padEnd(50)}║`);
+    console.log(`║   月频年化: ${formatPercent(metrics.monthlyAnnualReturn).padEnd(50)}║`);
+    console.log(`║   多周期一致性: ${formatPercent(metrics.multiPeriodConsistency).padEnd(46)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 牛熊市表现 -----
+    console.log("║ 【牛熊市表现】                                                 ║");
+    console.log(`║   牛市收益: ${formatPercent(metrics.bullReturn).padEnd(50)}║`);
+    console.log(`║   熊市收益: ${formatPercent(metrics.bearReturn).padEnd(50)}║`);
+    console.log(`║   牛市胜率: ${formatPercent(metrics.bullWinRate).padEnd(50)}║`);
+    console.log(`║   熊市胜率: ${formatPercent(metrics.bearWinRate).padEnd(50)}║`);
+    console.log(`║   牛市天数: ${String(metrics.bullDays || 0).padEnd(50)}║`);
+    console.log(`║   熊市天数: ${String(metrics.bearDays || 0).padEnd(50)}║`);
+    console.log(`║   市场择时: ${String(metrics.marketTiming || '-').padEnd(50)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 实盘偏差估算 -----
+    console.log("║ 【实盘偏差估算】                                               ║");
+    console.log(`║   估算总偏差: ${formatPercent(metrics.estimatedLiveDeviation).padEnd(48)}║`);
+    console.log(`║   滑点影响: ${formatPercent(metrics.slippageImpact).padEnd(50)}║`);
+    console.log(`║   时机影响: ${formatPercent(metrics.timingImpact).padEnd(50)}║`);
+    console.log(`║   调整后收益: ${formatPercent(metrics.adjustedReturn).padEnd(48)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 风控触发统计 -----
+    console.log("║ 【风控触发统计】                                               ║");
+    console.log(`║   止损触发次数: ${String(metrics.stopLossTriggers || 0).padEnd(46)}║`);
+    console.log(`║   最大回撤触发: ${String(metrics.maxDrawdownTriggers || 0).padEnd(46)}║`);
+    console.log(`║   单日亏损触发: ${String(metrics.dailyLossTriggers || 0).padEnd(46)}║`);
+    console.log(`║   总风控触发: ${String(metrics.totalRiskTriggers || 0).padEnd(48)}║`);
+    console.log(`║   风控触发比例: ${formatPercent(metrics.riskTriggerRatio).padEnd(46)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 资金曲线质量 -----
+    console.log("║ 【资金曲线质量】                                               ║");
+    console.log(`║   曲线偏离度: ${formatPercent(metrics.equityCurveDeviation).padEnd(48)}║`);
+    console.log(`║   R²拟合度: ${formatRatio(metrics.equityCurveR2).padEnd(50)}║`);
+    console.log(`║   曲线平滑度: ${formatRatio(metrics.equityCurveSmoothness).padEnd(48)}║`);
+    console.log(`║   曲线平滑: ${metrics.isEquityCurveSmooth ? '是' : '否'}`.padEnd(62) + "║");
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
 

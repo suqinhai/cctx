@@ -1,12 +1,15 @@
 {
   "name": "vectorbt",
   "version": "1.0.0",
-  "description": "",
+  "description": "A股量化交易回测与实盘系统",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "backtest": "node run.js",
+    "live": "node runLive.js",
+    "live:sim": "node runLive.js --mode=simulated"
   },
-  "keywords": [],
+  "keywords": ["quantitative", "trading", "backtest", "A-share"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
@@ -16,6 +19,7 @@
     "csv-parser": "^3.2.0",
     "dayjs": "^1.11.19",
     "fs-extra": "^11.3.2",
+    "iconv-lite": "^0.6.3",
     "lodash": "^4.17.21",
     "xlsx": "^0.18.5"
   }

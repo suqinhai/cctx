@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node run.js)"
+      "Bash(node run.js)",
+      "WebSearch",
+      "Bash(npm install iconv-lite)"
     ],
     "deny": [],
     "ask": []
