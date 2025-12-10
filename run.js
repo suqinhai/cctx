@@ -1,6 +1,6 @@
 // run.js
 // ============================================
-// 主程序入口 - 运行回测并输出完整业绩报告
+// 主程序入口 - 运行回测并输出完整业绩报告  
 // ============================================
 //
 // 使用方法：
@@ -163,6 +163,20 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
         fs.writeFileSync(path.join(reportDir, "yearly_returns.csv"), yearlyCsv.join("\n"));
     }
 
+    // ----- 5.7 生成季度收益 CSV -----
+    if (metrics.quarterlyReturns && metrics.quarterlyReturns.length > 0) {
+        const quarterlyCsv = ["季度,收益率,期初净值,期末净值"];
+        metrics.quarterlyReturns.forEach(q => {
+            quarterlyCsv.push([
+                q.quarter,
+                (q.return * 100).toFixed(2) + '%',
+                q.startNav.toFixed(2),
+                q.endNav.toFixed(2)
+            ].join(","));
+        });
+        fs.writeFileSync(path.join(reportDir, "quarterly_returns.csv"), quarterlyCsv.join("\n"));
+    }
+
     // ========== 第六步：打印完整业绩报告 ==========
     console.log("\n");
     console.log("╔════════════════════════════════════════════════════════════════╗");
@@ -192,18 +206,33 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
     console.log("║ 【收益指标】                                                   ║");
     console.log(`║   总收益率: ${formatPercent(metrics.totalReturn).padEnd(50)}║`);
     console.log(`║   年化收益率: ${formatPercent(metrics.annualReturn).padEnd(48)}║`);
+    console.log(`║   日均收益率: ${formatPercent(metrics.dailyAvgReturn).padEnd(48)}║`);
+    console.log(`║   收益率中位数: ${formatPercent(metrics.medianReturn).padEnd(46)}║`);
+    console.log(`║   历史最高收益: ${formatPercent(metrics.peakReturn)} (${metrics.peakReturnDate || '-'})`.padEnd(62) + "║");
+    console.log(`║   超额收益率: ${formatPercent(metrics.excessReturn).padEnd(48)}║`);
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
 
     // ----- 风险指标 -----
     console.log("║ 【风险指标】                                                   ║");
     console.log(`║   年化波动率: ${formatPercent(metrics.annualVolatility).padEnd(48)}║`);
+    console.log(`║   下行波动率: ${formatPercent(metrics.downsideVolatility).padEnd(48)}║`);
+    console.log(`║   收益率标准差: ${formatPercent(metrics.returnStdDev).padEnd(46)}║`);
     console.log(`║   最大回撤: ${formatPercent(metrics.maxDrawdown).padEnd(50)}║`);
+    console.log(`║   平均回撤: ${formatPercent(metrics.averageDrawdown).padEnd(50)}║`);
+    console.log(`║   水下时间比例: ${formatPercent(metrics.underwaterRatio).padEnd(46)}║`);
     console.log(`║   回撤峰值日: ${(metrics.drawdownPeakDate || '-').padEnd(48)}║`);
     console.log(`║   回撤谷值日: ${(metrics.drawdownTroughDate || '-').padEnd(48)}║`);
     console.log(`║   回撤恢复日: ${String(metrics.drawdownRecoveryDate || '-').padEnd(48)}║`);
     console.log(`║   回撤持续天数: ${String(metrics.drawdownDays || '-').padEnd(46)}║`);
     console.log(`║   恢复所需天数: ${String(metrics.recoveryDays !== null ? metrics.recoveryDays : '未恢复').padEnd(46)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 最大单日涨跌 -----
+    console.log("║ 【最大单日涨跌】                                               ║");
+    console.log(`║   最大单日盈利: ${formatPercent(metrics.maxDailyGain)} (${metrics.maxDailyGainDate || '-'})`.padEnd(62) + "║");
+    console.log(`║   最大单日亏损: ${formatPercent(metrics.maxDailyLoss)} (${metrics.maxDailyLossDate || '-'})`.padEnd(62) + "║");
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
 
@@ -213,6 +242,12 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
     console.log(`║   索提诺比率 (Sortino): ${formatRatio(metrics.sortinoRatio).padEnd(38)}║`);
     console.log(`║   卡尔玛比率 (Calmar): ${formatRatio(metrics.calmarRatio).padEnd(39)}║`);
     console.log(`║   收益回撤比: ${formatRatio(metrics.returnDrawdownRatio).padEnd(48)}║`);
+    console.log(`║   Omega比率: ${formatRatio(metrics.omegaRatio).padEnd(49)}║`);
+    console.log(`║   Gain-to-Pain: ${formatRatio(metrics.gainToPainRatio).padEnd(45)}║`);
+    console.log(`║   Tail比率: ${formatRatio(metrics.tailRatio).padEnd(50)}║`);
+    console.log(`║   Sterling比率: ${formatRatio(metrics.sterlingRatio).padEnd(46)}║`);
+    console.log(`║   Burke比率: ${formatRatio(metrics.burkeRatio).padEnd(49)}║`);
+    console.log(`║   Ulcer Index: ${formatRatio(metrics.ulcerIndex).padEnd(47)}║`);
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
 
@@ -285,6 +320,43 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
     console.log(`║   偏度 (Skewness): ${formatRatio(metrics.skewness).padEnd(43)}║`);
     console.log(`║   峰度 (Kurtosis): ${formatRatio(metrics.kurtosis).padEnd(43)}║`);
     console.log(`║   月度胜率: ${formatPercent(metrics.monthlyWinRate).padEnd(50)}║`);
+    console.log(`║   周度胜率: ${formatPercent(metrics.weeklyWinRate).padEnd(50)}║`);
+    console.log(`║   正收益天数占比: ${formatPercent(metrics.positiveReturnRatio).padEnd(44)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 持仓天数统计 -----
+    console.log("║ 【持仓天数统计】                                               ║");
+    console.log(`║   最长持仓天数: ${String(metrics.maxHoldingDays || '-').padEnd(46)}║`);
+    console.log(`║   最短持仓天数: ${String(metrics.minHoldingDays || '-').padEnd(46)}║`);
+    console.log(`║   平均持仓天数: ${metrics.avgHoldingDays ? metrics.avgHoldingDays.toFixed(1) : '-'}`.padEnd(65) + "║");
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 资金效率 -----
+    console.log("║ 【资金效率】                                                   ║");
+    console.log(`║   单笔最大投入: ${formatNumber(metrics.maxTradeSize).padEnd(46)}║`);
+    console.log(`║   换手率: ${formatRatio(metrics.turnoverRate).padEnd(52)}║`);
+    console.log(`║   空仓天数: ${String(metrics.emptyDays || '-').padEnd(50)}║`);
+    console.log(`║   空仓比例: ${formatPercent(metrics.emptyRatio).padEnd(50)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 月度极值 -----
+    console.log("║ 【月度极值】                                                   ║");
+    console.log(`║   最佳月份: ${(metrics.bestMonth || '-').padEnd(50)}║`);
+    console.log(`║   最佳月收益: ${formatPercent(metrics.bestMonthReturn).padEnd(48)}║`);
+    console.log(`║   最差月份: ${(metrics.worstMonth || '-').padEnd(50)}║`);
+    console.log(`║   最差月收益: ${formatPercent(metrics.worstMonthReturn).padEnd(48)}║`);
+    console.log(`║   最大连续盈利月数: ${String(metrics.maxConsecutiveWinMonths || 0).padEnd(42)}║`);
+    console.log(`║   最大连续亏损月数: ${String(metrics.maxConsecutiveLossMonths || 0).padEnd(42)}║`);
+
+    console.log("╠════════════════════════════════════════════════════════════════╣");
+
+    // ----- 去除极端值收益 -----
+    console.log("║ 【去除极端值收益】(排除最好/最差各5天)                         ║");
+    console.log(`║   调整后总收益: ${formatPercent(metrics.trimmedTotalReturn).padEnd(46)}║`);
+    console.log(`║   调整后日均收益: ${formatPercent(metrics.trimmedAvgReturn).padEnd(44)}║`);
 
     console.log("╠════════════════════════════════════════════════════════════════╣");
 
@@ -308,6 +380,7 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
     console.log(`║   滚动夏普: report/rolling_sharpe.csv                          ║`);
     console.log(`║   回撤恢复: report/drawdown_periods.csv                        ║`);
     console.log(`║   月度收益: report/monthly_returns.csv                         ║`);
+    console.log(`║   季度收益: report/quarterly_returns.csv                       ║`);
     console.log(`║   年度收益: report/yearly_returns.csv                          ║`);
 
     console.log("╚════════════════════════════════════════════════════════════════╝");
@@ -382,6 +455,20 @@ const { generateMetrics } = require("./utils/metrics"); // 业绩指标计算
         metrics.yearlyReturns.forEach(y => {
             const sign = y.return >= 0 ? '+' : '';
             console.log(`   ${y.year}: ${sign}${(y.return * 100).toFixed(2)}%`);
+        });
+    }
+
+    // ----- 季度收益统计 -----
+    if (metrics.quarterlyReturns && metrics.quarterlyReturns.length > 0) {
+        console.log("\n📊 季度收益分布:");
+        const positiveQuarters = metrics.quarterlyReturns.filter(q => q.return > 0);
+        const quarterReturns = metrics.quarterlyReturns.map(q => q.return);
+        const avgQuarterReturn = quarterReturns.reduce((a, b) => a + b, 0) / quarterReturns.length;
+        console.log(`   季度胜率: ${(positiveQuarters.length / metrics.quarterlyReturns.length * 100).toFixed(1)}% (${positiveQuarters.length}/${metrics.quarterlyReturns.length})`);
+        console.log(`   平均季度收益: ${(avgQuarterReturn * 100).toFixed(2)}%`);
+        metrics.quarterlyReturns.slice(-4).forEach(q => {
+            const sign = q.return >= 0 ? '+' : '';
+            console.log(`   ${q.quarter}: ${sign}${(q.return * 100).toFixed(2)}%`);
         });
     }
 

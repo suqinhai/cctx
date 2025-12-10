@@ -754,6 +754,592 @@ function calcReturnDrawdownRatio(totalReturn, maxDrawdown) {
     return maxDrawdown > 0 ? totalReturn / maxDrawdown : (totalReturn > 0 ? Infinity : 0);
 }
 
+// ============================================
+// 新增指标函数 - 第二批
+// ============================================
+
+/**
+ * 计算下行波动率（只计算亏损部分的波动率）
+ *
+ * @param {Array} dailyReturns - 日收益率数组
+ * @param {number} threshold - 目标收益率阈值，默认0
+ * @returns {number} 年化下行波动率
+ */
+function calcDownsideVolatility(dailyReturns, threshold = 0) {
+    const returns = dailyReturns.map(r => typeof r === 'object' ? r.return : r);
+    if (returns.length < 2) return 0;
+
+    // 只取低于阈值的收益
+    const downsideReturns = returns.filter(r => r < threshold);
+    if (downsideReturns.length === 0) return 0;
+
+    const variance = downsideReturns.reduce((sum, r) => sum + Math.pow(r - threshold, 2), 0) / downsideReturns.length;
+    return Math.sqrt(variance) * Math.sqrt(252);
+}
+
+/**
+ * 计算最大单日涨跌幅
+ *
+ * @param {Array} dailyReturns - 日收益率数组
+ * @returns {Object} 最大单日涨跌幅信息
+ */
+function calcMaxDailyReturn(dailyReturns) {
+    const returns = dailyReturns.map(r => typeof r === 'object' ? r.return : r);
+    if (returns.length === 0) return { maxGain: 0, maxLoss: 0, maxGainDate: null, maxLossDate: null };
+
+    let maxGain = -Infinity, maxLoss = Infinity;
+    let maxGainIdx = 0, maxLossIdx = 0;
+
+    returns.forEach((r, i) => {
+        if (r > maxGain) { maxGain = r; maxGainIdx = i; }
+        if (r < maxLoss) { maxLoss = r; maxLossIdx = i; }
+    });
+
+    return {
+        maxGain: maxGain === -Infinity ? 0 : maxGain,
+        maxLoss: maxLoss === Infinity ? 0 : Math.abs(maxLoss),
+        maxGainDate: dailyReturns[maxGainIdx]?.date || null,
+        maxLossDate: dailyReturns[maxLossIdx]?.date || null
+    };
+}
+
+/**
+ * 计算平均回撤
+ *
+ * @param {Array} navs - 净值序列
+ * @returns {number} 平均回撤
+ */
+function calcAverageDrawdown(navs) {
+    if (navs.length < 2) return 0;
+
+    let peak = navs[0].nav;
+    let totalDrawdown = 0;
+    let drawdownCount = 0;
+
+    for (let i = 1; i < navs.length; i++) {
+        if (navs[i].nav > peak) {
+            peak = navs[i].nav;
+        } else {
+            const drawdown = (peak - navs[i].nav) / peak;
+            if (drawdown > 0) {
+                totalDrawdown += drawdown;
+                drawdownCount++;
+            }
+        }
+    }
+
+    return drawdownCount > 0 ? totalDrawdown / drawdownCount : 0;
+}
+
+/**
+ * 计算水下时间比例（净值低于历史高点的时间占比）
+ *
+ * @param {Array} navs - 净值序列
+ * @returns {number} 水下时间比例
+ */
+function calcUnderwaterRatio(navs) {
+    if (navs.length < 2) return 0;
+
+    let peak = navs[0].nav;
+    let underwaterDays = 0;
+
+    for (let i = 1; i < navs.length; i++) {
+        if (navs[i].nav < peak) {
+            underwaterDays++;
+        } else {
+            peak = navs[i].nav;
+        }
+    }
+
+    return underwaterDays / (navs.length - 1);
+}
+
+/**
+ * 计算累计收益率最高点
+ *
+ * @param {Array} navs - 净值序列
+ * @returns {Object} 最高点信息
+ */
+function calcPeakReturn(navs) {
+    if (navs.length < 2) return { peakReturn: 0, peakDate: null, peakNav: 0 };
+
+    const startNav = navs[0].nav;
+    let maxReturn = -Infinity;
+    let maxReturnIdx = 0;
+
+    for (let i = 1; i < navs.length; i++) {
+        const ret = (navs[i].nav - startNav) / startNav;
+        if (ret > maxReturn) {
+            maxReturn = ret;
+            maxReturnIdx = i;
+        }
+    }
+
+    return {
+        peakReturn: maxReturn === -Infinity ? 0 : maxReturn,
+        peakDate: navs[maxReturnIdx].date,
+        peakNav: navs[maxReturnIdx].nav
+    };
+}
+
+/**
+ * 计算日均收益率
+ *
+ * @param {Array} dailyReturns - 日收益率数组
+ * @returns {number} 日均收益率
+ */
+function calcDailyAvgReturn(dailyReturns) {
+    const returns = dailyReturns.map(r => typeof r === 'object' ? r.return : r);
+    if (returns.length === 0) return 0;
+    return returns.reduce((a, b) => a + b, 0) / returns.length;
+}
+
+/**
+ * 计算收益率中位数
+ *
+ * @param {Array} dailyReturns - 日收益率数组
+ * @returns {number} 收益率中位数
+ */
+function calcMedianReturn(dailyReturns) {
+    const returns = dailyReturns.map(r => typeof r === 'object' ? r.return : r);
+    if (returns.length === 0) return 0;
+
+    const sorted = [...returns].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+
+    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * 计算收益率标准差
+ *
+ * @param {Array} dailyReturns - 日收益率数组
+ * @returns {number} 日收益率标准差
+ */
+function calcReturnStdDev(dailyReturns) {
+    const returns = dailyReturns.map(r => typeof r === 'object' ? r.return : r);
+    if (returns.length < 2) return 0;
+
+    const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / (returns.length - 1);
+    return Math.sqrt(variance);
+}
+
+/**
+ * 计算正收益占比
+ *
+ * @param {Array} dailyReturns - 日收益率数组
+ * @returns {number} 正收益占比
+ */
+function calcPositiveReturnRatio(dailyReturns) {
+    const returns = dailyReturns.map(r => typeof r === 'object' ? r.return : r);
+    if (returns.length === 0) return 0;
+
+    const positiveCount = returns.filter(r => r > 0).length;
+    return positiveCount / returns.length;
+}
+
+/**
+ * 计算周度收益和胜率
+ *
+ * @param {Array} navs - 净值序列
+ * @returns {Object} 周度统计
+ */
+function calcWeeklyStats(navs) {
+    if (navs.length < 5) return { weeklyReturns: [], weeklyWinRate: 0 };
+
+    const weeklyReturns = [];
+    let weekStartNav = navs[0].nav;
+    let weekStartIdx = 0;
+
+    for (let i = 1; i < navs.length; i++) {
+        // 简化处理：每5个交易日为一周
+        if ((i - weekStartIdx) >= 5 || i === navs.length - 1) {
+            const weekReturn = (navs[i].nav - weekStartNav) / weekStartNav;
+            weeklyReturns.push({
+                startDate: navs[weekStartIdx].date,
+                endDate: navs[i].date,
+                return: weekReturn
+            });
+            weekStartNav = navs[i].nav;
+            weekStartIdx = i;
+        }
+    }
+
+    const winWeeks = weeklyReturns.filter(w => w.return > 0).length;
+    const weeklyWinRate = weeklyReturns.length > 0 ? winWeeks / weeklyReturns.length : 0;
+
+    return { weeklyReturns, weeklyWinRate };
+}
+
+/**
+ * 计算季度收益
+ *
+ * @param {Array} navs - 净值序列
+ * @returns {Array} 季度收益数组
+ */
+function calcQuarterlyReturns(navs) {
+    if (navs.length < 2) return [];
+
+    const quarterlyReturns = [];
+    let currentQuarter = getQuarter(navs[0].date);
+    let quarterStartNav = navs[0].nav;
+
+    for (let i = 1; i < navs.length; i++) {
+        const quarter = getQuarter(navs[i].date);
+
+        if (quarter !== currentQuarter) {
+            const prevNav = navs[i - 1].nav;
+            const quarterReturn = (prevNav - quarterStartNav) / quarterStartNav;
+            quarterlyReturns.push({
+                quarter: currentQuarter,
+                return: quarterReturn,
+                startNav: quarterStartNav,
+                endNav: prevNav
+            });
+
+            currentQuarter = quarter;
+            quarterStartNav = prevNav;
+        }
+    }
+
+    // 最后一个季度
+    const lastNav = navs[navs.length - 1].nav;
+    const lastReturn = (lastNav - quarterStartNav) / quarterStartNav;
+    quarterlyReturns.push({
+        quarter: currentQuarter,
+        return: lastReturn,
+        startNav: quarterStartNav,
+        endNav: lastNav
+    });
+
+    return quarterlyReturns;
+}
+
+// 辅助函数：获取季度标识
+function getQuarter(dateStr) {
+    const month = parseInt(dateStr.substring(5, 7));
+    const year = dateStr.substring(0, 4);
+    const q = Math.ceil(month / 3);
+    return `${year}Q${q}`;
+}
+
+/**
+ * 计算最佳/最差月份
+ *
+ * @param {Array} monthlyReturns - 月度收益数组
+ * @returns {Object} 最佳最差月份信息
+ */
+function calcBestWorstMonth(monthlyReturns) {
+    if (monthlyReturns.length === 0) {
+        return { bestMonth: null, bestReturn: 0, worstMonth: null, worstReturn: 0 };
+    }
+
+    let best = monthlyReturns[0], worst = monthlyReturns[0];
+
+    monthlyReturns.forEach(m => {
+        if (m.return > best.return) best = m;
+        if (m.return < worst.return) worst = m;
+    });
+
+    return {
+        bestMonth: best.month,
+        bestReturn: best.return,
+        worstMonth: worst.month,
+        worstReturn: worst.return
+    };
+}
+
+/**
+ * 计算连续盈利/亏损月数
+ *
+ * @param {Array} monthlyReturns - 月度收益数组
+ * @returns {Object} 连续月度统计
+ */
+function calcConsecutiveMonths(monthlyReturns) {
+    if (monthlyReturns.length === 0) {
+        return { maxConsecutiveWinMonths: 0, maxConsecutiveLossMonths: 0 };
+    }
+
+    let consecutiveWin = 0, consecutiveLoss = 0;
+    let maxConsecutiveWin = 0, maxConsecutiveLoss = 0;
+
+    monthlyReturns.forEach(m => {
+        if (m.return > 0) {
+            consecutiveWin++;
+            maxConsecutiveWin = Math.max(maxConsecutiveWin, consecutiveWin);
+            consecutiveLoss = 0;
+        } else if (m.return < 0) {
+            consecutiveLoss++;
+            maxConsecutiveLoss = Math.max(maxConsecutiveLoss, consecutiveLoss);
+            consecutiveWin = 0;
+        } else {
+            consecutiveWin = 0;
+            consecutiveLoss = 0;
+        }
+    });
+
+    return {
+        maxConsecutiveWinMonths: maxConsecutiveWin,
+        maxConsecutiveLossMonths: maxConsecutiveLoss
+    };
+}
+
+/**
+ * 计算交易持仓天数统计
+ *
+ * @param {Array} trades - 交易记录
+ * @returns {Object} 持仓天数统计
+ */
+function calcHoldingDaysStats(trades) {
+    const closedTrades = trades.filter(t => t.exitType !== 'OPEN' && t.holdingDays);
+    if (closedTrades.length === 0) {
+        return { maxHoldingDays: 0, minHoldingDays: 0, avgHoldingDays: 0 };
+    }
+
+    const holdingDays = closedTrades.map(t => t.holdingDays);
+    return {
+        maxHoldingDays: Math.max(...holdingDays),
+        minHoldingDays: Math.min(...holdingDays),
+        avgHoldingDays: holdingDays.reduce((a, b) => a + b, 0) / holdingDays.length
+    };
+}
+
+/**
+ * 计算平均每笔交易成本
+ *
+ * @param {number} totalCost - 总交易成本
+ * @param {number} totalTrades - 总交易次数
+ * @returns {number} 平均每笔成本
+ */
+function calcAvgTradeCost(totalCost, totalTrades) {
+    return totalTrades > 0 ? totalCost / totalTrades : 0;
+}
+
+/**
+ * 计算单笔最大投入资金
+ *
+ * @param {Array} trades - 交易记录
+ * @returns {Object} 最大投入信息
+ */
+function calcMaxTradeSize(trades) {
+    if (trades.length === 0) {
+        return { maxTradeSize: 0, maxTradeSizeDate: null };
+    }
+
+    let maxSize = 0, maxSizeIdx = 0;
+    trades.forEach((t, i) => {
+        if (t.cost > maxSize) {
+            maxSize = t.cost;
+            maxSizeIdx = i;
+        }
+    });
+
+    return {
+        maxTradeSize: maxSize,
+        maxTradeSizeDate: trades[maxSizeIdx].entryDate
+    };
+}
+
+/**
+ * 计算换手率
+ *
+ * @param {Array} trades - 交易记录
+ * @param {number} avgNav - 平均净值
+ * @returns {number} 换手率
+ */
+function calcTurnoverRate(trades, avgNav) {
+    if (trades.length === 0 || avgNav === 0) return 0;
+
+    const totalTradeValue = trades.reduce((sum, t) => {
+        const buyValue = t.cost || 0;
+        const sellValue = t.proceeds || 0;
+        return sum + buyValue + sellValue;
+    }, 0);
+
+    return totalTradeValue / avgNav;
+}
+
+/**
+ * 计算空仓统计
+ *
+ * @param {Array} trades - 交易记录
+ * @param {number} totalDays - 总交易日数
+ * @returns {Object} 空仓统计
+ */
+function calcEmptyPositionStats(trades, totalDays) {
+    if (trades.length === 0) {
+        return { emptyDays: totalDays, emptyRatio: 1 };
+    }
+
+    // 计算持仓天数总和
+    const holdingDays = trades.reduce((sum, t) => sum + (t.holdingDays || 0), 0);
+    const emptyDays = Math.max(0, totalDays - holdingDays);
+
+    return {
+        emptyDays,
+        emptyRatio: totalDays > 0 ? emptyDays / totalDays : 0
+    };
+}
+
+/**
+ * 计算Omega比率
+ *
+ * @param {Array} dailyReturns - 日收益率数组
+ * @param {number} threshold - 目标收益率阈值，默认0
+ * @returns {number} Omega比率
+ */
+function calcOmegaRatio(dailyReturns, threshold = 0) {
+    const returns = dailyReturns.map(r => typeof r === 'object' ? r.return : r);
+    if (returns.length === 0) return 0;
+
+    let sumGains = 0, sumLosses = 0;
+
+    returns.forEach(r => {
+        if (r > threshold) {
+            sumGains += (r - threshold);
+        } else {
+            sumLosses += (threshold - r);
+        }
+    });
+
+    return sumLosses > 0 ? sumGains / sumLosses : (sumGains > 0 ? Infinity : 0);
+}
+
+/**
+ * 计算Gain-to-Pain比率（总盈利/总亏损绝对值）
+ *
+ * @param {Array} dailyReturns - 日收益率数组
+ * @returns {number} Gain-to-Pain比率
+ */
+function calcGainToPainRatio(dailyReturns) {
+    const returns = dailyReturns.map(r => typeof r === 'object' ? r.return : r);
+    if (returns.length === 0) return 0;
+
+    const totalGain = returns.filter(r => r > 0).reduce((a, b) => a + b, 0);
+    const totalPain = Math.abs(returns.filter(r => r < 0).reduce((a, b) => a + b, 0));
+
+    return totalPain > 0 ? totalGain / totalPain : (totalGain > 0 ? Infinity : 0);
+}
+
+/**
+ * 计算Tail比率（右尾/左尾收益比）
+ *
+ * @param {Array} dailyReturns - 日收益率数组
+ * @param {number} percentile - 尾部百分位，默认5%
+ * @returns {number} Tail比率
+ */
+function calcTailRatio(dailyReturns, percentile = 0.05) {
+    const returns = dailyReturns.map(r => typeof r === 'object' ? r.return : r);
+    if (returns.length < 20) return 0;
+
+    const sorted = [...returns].sort((a, b) => a - b);
+    const tailSize = Math.floor(returns.length * percentile);
+    if (tailSize === 0) return 0;
+
+    // 左尾（最差的收益）
+    const leftTail = sorted.slice(0, tailSize);
+    const leftTailAvg = Math.abs(leftTail.reduce((a, b) => a + b, 0) / tailSize);
+
+    // 右尾（最好的收益）
+    const rightTail = sorted.slice(-tailSize);
+    const rightTailAvg = rightTail.reduce((a, b) => a + b, 0) / tailSize;
+
+    return leftTailAvg > 0 ? rightTailAvg / leftTailAvg : (rightTailAvg > 0 ? Infinity : 0);
+}
+
+/**
+ * 计算Ulcer Index（考虑回撤深度和持续时间的风险指标）
+ *
+ * @param {Array} navs - 净值序列
+ * @returns {number} Ulcer Index
+ */
+function calcUlcerIndex(navs) {
+    if (navs.length < 2) return 0;
+
+    let peak = navs[0].nav;
+    let sumSquaredDrawdown = 0;
+
+    for (let i = 1; i < navs.length; i++) {
+        if (navs[i].nav > peak) {
+            peak = navs[i].nav;
+        }
+        const drawdown = (peak - navs[i].nav) / peak * 100; // 百分比形式
+        sumSquaredDrawdown += drawdown * drawdown;
+    }
+
+    return Math.sqrt(sumSquaredDrawdown / navs.length);
+}
+
+/**
+ * 计算Sterling比率（年化收益/平均回撤）
+ *
+ * @param {number} annualReturn - 年化收益率
+ * @param {number} avgDrawdown - 平均回撤
+ * @returns {number} Sterling比率
+ */
+function calcSterlingRatio(annualReturn, avgDrawdown) {
+    return avgDrawdown > 0 ? annualReturn / avgDrawdown : (annualReturn > 0 ? Infinity : 0);
+}
+
+/**
+ * 计算Burke比率（年化收益/回撤平方和的平方根）
+ *
+ * @param {number} annualReturn - 年化收益率
+ * @param {Array} drawdownPeriods - 回撤事件数组
+ * @returns {number} Burke比率
+ */
+function calcBurkeRatio(annualReturn, drawdownPeriods) {
+    if (drawdownPeriods.length === 0) return annualReturn > 0 ? Infinity : 0;
+
+    const sumSquaredDrawdown = drawdownPeriods.reduce((sum, p) => sum + Math.pow(p.maxDrawdown, 2), 0);
+    const burkeRisk = Math.sqrt(sumSquaredDrawdown);
+
+    return burkeRisk > 0 ? annualReturn / burkeRisk : (annualReturn > 0 ? Infinity : 0);
+}
+
+/**
+ * 计算去除极端值后的收益表现
+ *
+ * @param {Array} dailyReturns - 日收益率数组
+ * @param {number} excludeDays - 排除的天数，默认5
+ * @returns {Object} 去除极端值后的统计
+ */
+function calcTrimmedReturn(dailyReturns, excludeDays = 5) {
+    const returns = dailyReturns.map(r => typeof r === 'object' ? r.return : r);
+    if (returns.length <= excludeDays * 2) {
+        return { trimmedTotalReturn: 0, trimmedAvgReturn: 0 };
+    }
+
+    const sorted = [...returns].sort((a, b) => a - b);
+    // 去掉最好和最差的N天
+    const trimmed = sorted.slice(excludeDays, -excludeDays);
+
+    const trimmedTotal = trimmed.reduce((a, b) => a + b, 0);
+    const trimmedAvg = trimmedTotal / trimmed.length;
+
+    // 累计收益（简化计算）
+    const trimmedTotalReturn = trimmed.reduce((acc, r) => acc * (1 + r), 1) - 1;
+
+    return {
+        trimmedTotalReturn,
+        trimmedAvgReturn: trimmedAvg,
+        excludedBestDays: excludeDays,
+        excludedWorstDays: excludeDays
+    };
+}
+
+/**
+ * 计算超额收益率
+ *
+ * @param {number} strategyReturn - 策略收益率
+ * @param {number} benchmarkReturn - 基准收益率
+ * @returns {number} 超额收益率
+ */
+function calcExcessReturn(strategyReturn, benchmarkReturn) {
+    return strategyReturn - benchmarkReturn;
+}
+
 /**
  * 计算基准对比（买入持有收益）
  *
@@ -829,7 +1415,7 @@ function generateMetrics(result, marketData = null) {
     // 交易日数
     const tradingDays = navs.length;
 
-    // ===== 新增指标 =====
+    // ===== 已有指标 =====
 
     // 月度/年度收益
     const monthlyReturns = calcMonthlyReturns(navs);
@@ -857,12 +1443,90 @@ function generateMetrics(result, marketData = null) {
     // 收益回撤比
     const returnDrawdownRatio = calcReturnDrawdownRatio(totalReturn, drawdownInfo.maxDrawdown);
 
+    // ===== 新增指标 - 第二批 =====
+
+    // 下行波动率
+    const downsideVolatility = calcDownsideVolatility(dailyReturns);
+
+    // 最大单日涨跌幅
+    const maxDailyReturn = calcMaxDailyReturn(dailyReturns);
+
+    // 平均回撤
+    const averageDrawdown = calcAverageDrawdown(navs);
+
+    // 水下时间比例
+    const underwaterRatio = calcUnderwaterRatio(navs);
+
+    // 累计收益率最高点
+    const peakReturn = calcPeakReturn(navs);
+
+    // 日均收益率
+    const dailyAvgReturn = calcDailyAvgReturn(dailyReturns);
+
+    // 收益率中位数
+    const medianReturn = calcMedianReturn(dailyReturns);
+
+    // 收益率标准差
+    const returnStdDev = calcReturnStdDev(dailyReturns);
+
+    // 正收益占比
+    const positiveReturnRatio = calcPositiveReturnRatio(dailyReturns);
+
+    // 周度统计
+    const weeklyStats = calcWeeklyStats(navs);
+
+    // 季度收益
+    const quarterlyReturns = calcQuarterlyReturns(navs);
+
+    // 最佳/最差月份
+    const bestWorstMonth = calcBestWorstMonth(monthlyReturns);
+
+    // 连续盈亏月数
+    const consecutiveMonths = calcConsecutiveMonths(monthlyReturns);
+
+    // 持仓天数统计
+    const holdingDaysStats = calcHoldingDaysStats(trades);
+
+    // 单笔最大投入
+    const maxTradeSize = calcMaxTradeSize(trades);
+
+    // 计算平均净值用于换手率
+    const avgNav = navs.reduce((sum, n) => sum + n.nav, 0) / navs.length;
+
+    // 换手率
+    const turnoverRate = calcTurnoverRate(trades, avgNav);
+
+    // 空仓统计
+    const emptyPositionStats = calcEmptyPositionStats(trades, tradingDays);
+
+    // Omega比率
+    const omegaRatio = calcOmegaRatio(dailyReturns);
+
+    // Gain-to-Pain比率
+    const gainToPainRatio = calcGainToPainRatio(dailyReturns);
+
+    // Tail比率
+    const tailRatio = calcTailRatio(dailyReturns);
+
+    // Ulcer Index
+    const ulcerIndex = calcUlcerIndex(navs);
+
+    // Sterling比率
+    const sterlingRatio = calcSterlingRatio(annualReturn, averageDrawdown);
+
+    // Burke比率
+    const burkeRatio = calcBurkeRatio(annualReturn, drawdownPeriods);
+
+    // 去除极端值收益
+    const trimmedReturn = calcTrimmedReturn(dailyReturns, 5);
+
     // Alpha/Beta（如果有基准数据）
     let alpha = null;
     let beta = null;
     let informationRatio = null;
     let correlation = null;
     let benchmarkStats = null;
+    let excessReturn = null;
 
     if (marketData && marketData.length > 0) {
         const benchmarkReturns = calcBenchmarkDailyReturns(marketData);
@@ -872,6 +1536,7 @@ function generateMetrics(result, marketData = null) {
         alpha = calcAlpha(annualReturn, benchmarkStats.annualReturn, beta);
         informationRatio = calcInformationRatio(dailyReturns, benchmarkReturns);
         correlation = calcCorrelation(dailyReturns, benchmarkReturns);
+        excessReturn = calcExcessReturn(totalReturn, benchmarkStats.totalReturn);
     }
 
     return {
@@ -879,15 +1544,33 @@ function generateMetrics(result, marketData = null) {
         totalReturn,
         annualReturn,
         tradingDays,
+        dailyAvgReturn,
+        medianReturn,
+        returnStdDev,
+        positiveReturnRatio,
+
+        // ===== 收益最高点 =====
+        peakReturn: peakReturn.peakReturn,
+        peakReturnDate: peakReturn.peakDate,
+        peakNav: peakReturn.peakNav,
 
         // ===== 风险指标 =====
         annualVolatility,
+        downsideVolatility,
         maxDrawdown: drawdownInfo.maxDrawdown,
         drawdownPeakDate: drawdownInfo.peakDate,
         drawdownTroughDate: drawdownInfo.troughDate,
         drawdownRecoveryDate: drawdownInfo.recoveryDate,
         drawdownDays: drawdownInfo.drawdownDays,
         recoveryDays: drawdownInfo.recoveryDays,
+        averageDrawdown,
+        underwaterRatio,
+
+        // ===== 最大单日涨跌 =====
+        maxDailyGain: maxDailyReturn.maxGain,
+        maxDailyGainDate: maxDailyReturn.maxGainDate,
+        maxDailyLoss: maxDailyReturn.maxLoss,
+        maxDailyLossDate: maxDailyReturn.maxLossDate,
 
         // ===== VaR =====
         var95,
@@ -899,14 +1582,44 @@ function generateMetrics(result, marketData = null) {
         sortinoRatio,
         calmarRatio,
         returnDrawdownRatio,
+        omegaRatio,
+        gainToPainRatio,
+        tailRatio,
+        ulcerIndex,
+        sterlingRatio,
+        burkeRatio,
 
         // ===== 交易统计 =====
         ...tradeStats,
 
+        // ===== 持仓天数 =====
+        ...holdingDaysStats,
+
+        // ===== 单笔最大投入 =====
+        maxTradeSize: maxTradeSize.maxTradeSize,
+        maxTradeSizeDate: maxTradeSize.maxTradeSizeDate,
+
+        // ===== 换手率和空仓 =====
+        turnoverRate,
+        emptyDays: emptyPositionStats.emptyDays,
+        emptyRatio: emptyPositionStats.emptyRatio,
+
         // ===== 时间分布收益 =====
         monthlyReturns,
         yearlyReturns,
+        quarterlyReturns,
         monthlyWinRate,
+        weeklyWinRate: weeklyStats.weeklyWinRate,
+
+        // ===== 最佳/最差月份 =====
+        bestMonth: bestWorstMonth.bestMonth,
+        bestMonthReturn: bestWorstMonth.bestReturn,
+        worstMonth: bestWorstMonth.worstMonth,
+        worstMonthReturn: bestWorstMonth.worstReturn,
+
+        // ===== 连续月度统计 =====
+        maxConsecutiveWinMonths: consecutiveMonths.maxConsecutiveWinMonths,
+        maxConsecutiveLossMonths: consecutiveMonths.maxConsecutiveLossMonths,
 
         // ===== 盈亏天数 =====
         ...profitLossDays,
@@ -919,11 +1632,16 @@ function generateMetrics(result, marketData = null) {
         skewness,
         kurtosis,
 
+        // ===== 去除极端值收益 =====
+        trimmedTotalReturn: trimmedReturn.trimmedTotalReturn,
+        trimmedAvgReturn: trimmedReturn.trimmedAvgReturn,
+
         // ===== Alpha/Beta（相对基准）=====
         alpha,
         beta,
         informationRatio,
         correlation,
+        excessReturn,
         benchmarkStats,
 
         // ===== 滚动指标 =====
@@ -966,5 +1684,32 @@ module.exports = {
     calcReturnDrawdownRatio,
     calcBenchmarkReturn,
     calcBenchmarkDailyReturns,
+    // 新增导出
+    calcDownsideVolatility,
+    calcMaxDailyReturn,
+    calcAverageDrawdown,
+    calcUnderwaterRatio,
+    calcPeakReturn,
+    calcDailyAvgReturn,
+    calcMedianReturn,
+    calcReturnStdDev,
+    calcPositiveReturnRatio,
+    calcWeeklyStats,
+    calcQuarterlyReturns,
+    calcBestWorstMonth,
+    calcConsecutiveMonths,
+    calcHoldingDaysStats,
+    calcAvgTradeCost,
+    calcMaxTradeSize,
+    calcTurnoverRate,
+    calcEmptyPositionStats,
+    calcOmegaRatio,
+    calcGainToPainRatio,
+    calcTailRatio,
+    calcUlcerIndex,
+    calcSterlingRatio,
+    calcBurkeRatio,
+    calcTrimmedReturn,
+    calcExcessReturn,
     generateMetrics
 };
